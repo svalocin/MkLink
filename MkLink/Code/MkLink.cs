@@ -26,6 +26,10 @@ namespace MkLink.Code
 
         public static Result Mapping(string option, string link, string target)
         {
+            option = option.Trim();
+            link = link.Trim();
+            target = target.Trim();
+
             Cmd cmd = new Cmd();
             Result result;
             if (cmd.Start(MoveCommand, target, link))
@@ -50,6 +54,10 @@ namespace MkLink.Code
 
         public static Result Link(string option, string link, string target)
         {
+            option = option.Trim();
+            link = link.Trim();
+            target = target.Trim();
+
             Cmd cmd = new Cmd();
             Result result;
             if (cmd.Start(MkLinkCommand, option, link, target))
