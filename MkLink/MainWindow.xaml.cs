@@ -14,6 +14,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using TenHelper.Common;
 
 namespace MkLink
 {
@@ -38,8 +39,8 @@ namespace MkLink
             string option = (this.OptionComboBox.SelectedItem as ComboBoxItem).Tag.ToString();
             string mode = (this.ModeComboBox.SelectedItem as ComboBoxItem).Tag.ToString();
 
-            Result result = MkLink.Code.MkLink.Start(mode, option, linkPath, targetPath);
-            System.Windows.MessageBox.Show(result.Info, "提示");
+            ResultInfo result = MkLink.Code.MkLink.Mk(mode, option, linkPath, targetPath);
+            System.Windows.MessageBox.Show(result.Message, "提示");
             //执行结束
 
             bt.IsEnabled = true;
@@ -60,8 +61,8 @@ namespace MkLink
         {
             Button bt = sender as Button;
             bt.IsEnabled = false;
-            Result result = MkLink.Code.MkLink.BatchStart(this.Text_File.Text);
-            System.Windows.MessageBox.Show(result.Info, "提示");
+            ResultInfo result = MkLink.Code.MkLink.BatchMk(this.Text_File.Text);
+            System.Windows.MessageBox.Show(result.Message, "提示");
             bt.IsEnabled = true;
         }
     }

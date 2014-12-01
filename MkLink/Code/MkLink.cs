@@ -1,87 +1,64 @@
-﻿using MyHelper;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using TenHelper.Common;
+using TenHelper.Windows;
 
 namespace MkLink.Code
 {
-    struct Result
-    {
-        public Result(bool isSuccess, string info)
-        {
-            IsSuccess = isSuccess;
-            Info = info;
-        }
-        public bool IsSuccess;
-        public string Info;
-    }
-
     class MkLink
     {
-        private static string MkLinkCommand = "mklink /{0} \"{1}\" \"{2}\"";
-        private static string MoveCommand = "move /y \"{0}\" \"{1}\"";
-
-        public static Result Mapping(string option, string link, string target)
+        public static ResultInfo MappingMode(string option, string link, string target)
         {
-            option = option.Trim();
-            link = link.Trim();
-            target = target.Trim();
+            ResultInfo result = DataDeal(ref option, ref link, ref target);
+            if (!result.IsSuccess) return result;
 
-            Cmd cmd = new Cmd();
-            Result result;
-            if (cmd.Start(MoveCommand, target, link))
+            try
             {
-                if (cmd.Start(MkLinkCommand, option, target, link))
-                {
-                    result = new Result(true, "执行成功");
-                }
-                else
-                {
-                    cmd.Start("move /y \"{0}\" \"{1}\"", link, target);
-                    result = new Result(false, "链接失败");
-                }
+                if (File.Exists(target)) File.Move(target, link);
+                else if (Directory.Exists(target)) DirectoryExtension.Move(target, link);
+                else return new ResultInfo(false, "请确保文件或目录存在");
+
+                Cmd cmd = new Cmd();
+                result = cmd.Start(MkLinkCommand, option, target, link);
+                cmd.Close();
+                return result;
             }
-            else
+            catch (Exception e)
             {
-                result = new Result(false, "移动文件失败");
+                return new ResultInfo(false, e.Message);
             }
-            cmd.Close();
+        }
+
+        public static ResultInfo LinkMode(string option, string link, string target)
+        {
+            ResultInfo result = DataDeal(ref option, ref link, ref target);
+            if (result.IsSuccess)
+            {
+                Cmd cmd = new Cmd();
+                result = cmd.Start(MkLinkCommand, option, link, target);
+                if (result.IsSuccess)
+                {
+                    result.SetResult(true, "执行成功");
+                }
+                cmd.Close();
+            }
             return result;
         }
 
-        public static Result Link(string option, string link, string target)
+        public static ResultInfo Mk(string mode, string option, string link, string target)
         {
-            option = option.Trim();
-            link = link.Trim();
-            target = target.Trim();
-
-            Cmd cmd = new Cmd();
-            Result result;
-            if (cmd.Start(MkLinkCommand, option, link, target))
-            {
-                result = new Result(true, "执行成功");
-            }
-            else
-            {
-                result = new Result(false, "链接失败");
-            }
-            cmd.Close();
-            return result;
-        }
-
-        public static Result Start(string mode, string option, string link, string target)
-        {
-            Result result = new Result(false, "未知错误");
-            switch (mode)
+            ResultInfo result = new ResultInfo(false, "未知错误");
+            switch (mode.Trim())
             {
                 case "Mapping":
-                    result = Mapping(option, link, target);
+                    result = MappingMode(option, link, target);
                     break;
                 case "Link":
-                    result = Link(option, link, target);
+                    result = LinkMode(option, link, target);
                     break;
                 default:
                     break;
@@ -90,53 +67,56 @@ namespace MkLink.Code
             return result;
         }
 
-        public static Result BatchStart(string filePath)
+        public static ResultInfo BatchMk(string filePath)
         {
-            Result result = new Result(false, "未知错误");
+            ResultInfo result = new ResultInfo(false, "未知错误");
             if (File.Exists(filePath))
             {
-                Queue<Result> resultQueue = new Queue<Result>();
-                StreamReader sr = new StreamReader(filePath);
+                Queue<ResultInfo> resultQueue = new Queue<ResultInfo>();
+                StreamReader sr = new StreamReader(filePath, System.Text.Encoding.GetEncoding("gb2312"));
                 string line;
                 while ((line = sr.ReadLine()) != null)
                 {
-                    Result res = new Result(false, "未知错误");
+                    ResultInfo res = new ResultInfo(false, "未知错误");
                     string[] strArray = line.Split('|').ToArray();
                     string target = "";
                     string link = "";
-                    string option = "d";
+                    string option = "";
                     string mode = "Link";
-                    if (strArray.Length < 2) { res.Info = "命令格式不对"; }
+                    if (strArray.Length < 2) { res.SetResult(false, "命令格式不对"); }
                     else
                     {
                         link = strArray[0]; target = strArray[1];
                         if (strArray.Length > 2) { option = strArray[2]; }
                         if (strArray.Length > 3) { mode = strArray[3]; }
                     }
-                    res = Start(mode, option, link, target);
+
+                    res = Mk(mode, option, link, target);
                     resultQueue.Enqueue(res);
                 }
                 sr.Close();
 
                 WriterLog(resultQueue);
 
-                result.IsSuccess = true;
-                foreach (Result res in resultQueue)
+                bool isSuccess = true;
+                string message = "执行结束";
+                foreach (ResultInfo res in resultQueue)
                 {
-                    result.IsSuccess = result.IsSuccess && res.IsSuccess;
+                    isSuccess = isSuccess && res.IsSuccess;
                 }
-                result.Info = "执行结束";
-                if (!result.IsSuccess) result.Info += "，存在命令执行不成功";
-                result.Info += "\n请到日志查看结果";
+                if (!isSuccess) message += "，存在命令执行不成功";
+                message += "\n请到日志查看结果";
+
+                result.SetResult(isSuccess, message);
             }
             else
             {
-                result.Info = "找不到指定文件";
+                result.SetResult(false, "找不到指定文件");
             }
             return result;
         }
 
-        private static void WriterLog(Queue<Result> resultQueue)
+        private static void WriterLog(Queue<ResultInfo> resultQueue)
         {
             string logDirectory = System.AppDomain.CurrentDomain.SetupInformation.ApplicationBase + "Log";
             if (!Directory.Exists(logDirectory)) Directory.CreateDirectory(logDirectory);
@@ -146,11 +126,43 @@ namespace MkLink.Code
             StreamWriter sw = new StreamWriter(logFile, true);
             sw.WriteLine();
             sw.WriteLine(DateTime.Now.ToString("hh:mm:ss"));
-            foreach (Result res in resultQueue)
+            foreach (ResultInfo res in resultQueue)
             {
-                sw.WriteLine(res.IsSuccess + "  " + res.Info);
+                sw.WriteLine(res.IsSuccess + "  " + res.Message.Replace("句柄无效。", "").Replace("\r\n", ""));
             }
             sw.Close();
         }
+
+        /// <summary>
+        /// 数据处理
+        /// </summary>
+        /// <param name="option"></param>
+        /// <param name="link"></param>
+        /// <param name="target"></param>
+        /// <returns>数据是否正确</returns>
+        private static ResultInfo DataDeal(ref string option, ref string link, ref string target)
+        {
+            option = option.Trim();
+            link = link.Trim();
+            target = target.Trim();
+
+            if (String.IsNullOrEmpty(link) || String.IsNullOrEmpty(target)) return new ResultInfo(false, "路径不能为空");
+
+            link = Path.GetFullPath(link.Trim());
+            target = Path.GetFullPath(target.Trim());
+
+            if (File.Exists(target) && option != "h")
+            {
+                return new ResultInfo(false, "文件只能使用硬链接（h）");
+            }
+            if (Directory.Exists(target) && option != "d" && option != "j")
+            {
+                return new ResultInfo(false, "目录只能使用符号链接（d）或 软链接（j）");
+            }
+
+            return new ResultInfo(true, "");
+        }
+
+        private static string MkLinkCommand = "mklink /{0} \"{1}\" \"{2}\"";
     }
 }
